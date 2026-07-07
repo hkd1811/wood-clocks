@@ -7,3 +7,4 @@
 - [부엉이 시계 (진자운동)](https://hkd1811.github.io/wood-clocks/owl_pendulum_final.html)
 - [삼각형 시계](https://hkd1811.github.io/wood-clocks/triangle_clock_final.html)
 - [티크나무 시계](https://hkd1811.github.io/wood-clocks/Teak-wood-clock.html)
+- [나무 아이추 시계](https://hkd1811.github.io/wood-clocks/wood_clock_kids.html)
