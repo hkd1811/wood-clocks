@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>스테이브 정면 템플릿 계산기</title>
+<style>
+  :root{
+    --walnut:#3E2A1E;
+    --oak:#C89666;
+    --parchment:#EFE6D8;
+    --chalk:#F5F0E6;
+    --copper:#B5651D;
+    --ink:#2B1D14;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--parchment);
+    color:var(--ink);
+    font-family:Georgia, 'Nanum Myeongjo', serif;
+    padding:24px 16px 60px;
+  }
+  h1{ font-size:21px; margin:0 0 4px; }
+  .sub{ font-size:13px; color:#6b5847; margin-bottom:18px; }
+  .panel{
+    background:var(--chalk);
+    border:1px solid #d8cbb4;
+    border-radius:4px;
+    padding:16px;
+    margin-bottom:16px;
+  }
+  .row{ display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
+  .row:last-child{margin-bottom:0;}
+  label{ font-size:13.5px; flex:1.3; }
+  .val{
+    font-family:'Courier New', monospace;
+    font-weight:bold;
+    color:var(--copper);
+    font-size:13.5px;
+    min-width:66px;
+    text-align:right;
+  }
+  input[type=range]{ flex:2; margin:0 10px; accent-color:var(--copper); }
+  .section-title{
+    font-size:13px;
+    font-weight:bold;
+    color:var(--walnut);
+    margin:0 0 10px;
+    padding-bottom:6px;
+    border-bottom:1px solid #d8cbb4;
+    letter-spacing:0.5px;
+  }
+  .grid3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:14px; }
+  .mini{ background:var(--walnut); color:var(--chalk); border-radius:4px; padding:10px 6px; text-align:center; }
+  .mini .n{ font-family:'Courier New', monospace; font-size:16px; font-weight:bold; color:var(--oak); }
+  .mini .l{ font-size:10.5px; opacity:0.85; margin-top:2px; }
+  svg{ width:100%; height:auto; display:block; }
+  .caption{ font-size:12px; text-align:center; color:#7a6a58; margin-top:6px; }
+  .note{
+    font-size:12.5px; line-height:1.65; color:#5a4a3a;
+    background:#fff8ec; border-left:3px solid var(--copper);
+    padding:10px 12px; margin-top:14px;
+  }
+  .step{
+    display:flex; gap:10px; align-items:flex-start;
+    margin-bottom:10px; font-size:13px; line-height:1.5;
+  }
+  .step .num{
+    background:var(--copper); color:#fff; border-radius:50%;
+    width:22px; height:22px; flex:none; display:flex;
+    align-items:center; justify-content:center; font-size:12px; font-weight:bold;
+  }
+</style>
+</head>
+<body>
+
+<h1>🛢️ 스테이브 정면 템플릿</h1>
+<div class="sub">외곽 실루엣(곡선) + 옆면 베벨각(직선) — 2단계 CNC 가공용</div>
+
+<div class="panel" style="background:var(--walnut);border-color:var(--walnut);">
+  <div class="section-title" style="color:var(--oak);border-color:#5a4530;">⓪ 목표 용량으로 자동 설계</div>
+  <div class="row">
+    <label style="color:var(--chalk);">목표 용량</label>
+    <input type="range" id="targetLiters" min="5" max="50" step="1" value="20">
+    <span class="val" id="targetLitersVal" style="color:var(--oak);">20L</span>
+  </div>
+  <div class="row">
+    <label style="color:var(--chalk);">충전율 (여유 공간)</label>
+    <input type="range" id="fillRatio" min="80" max="98" step="1" value="90">
+    <span class="val" id="fillRatioVal" style="color:var(--oak);">90%</span>
+  </div>
+  <button id="applyRecommendBtn" style="width:100%;padding:10px;background:var(--copper);color:#fff;border:none;border-radius:4px;font-size:14px;font-weight:bold;cursor:pointer;margin-top:6px;">
+    이 용량으로 최적 파라미터 적용
+  </button>
+  <div style="font-size:11.5px;color:var(--oak);margin-top:8px;line-height:1.5;">
+    벌지비율 1.225 · 높이비율 1.6 (권장 범위 중간값) 고정, 현재 스테이브 개수·두께 기준으로 목표 <b>실사용 용량(충전율 반영)</b>에 맞는 헤드 지름·높이를 역산합니다.
+  </div>
+</div>
+
+<div class="panel">
+  <div class="section-title">① 통 치수</div>
+  <div class="row">
+    <label>헤드 지름 (위/아래)</label>
+    <input type="range" id="dHead" min="150" max="600" step="5" value="300">
+    <span class="val" id="dHeadVal">300mm</span>
+  </div>
+  <div class="row">
+    <label>🔒 벌지 지름 (자동, 헤드×1.225)</label>
+    <input type="range" id="dBilge" min="150" max="750" step="5" value="367" disabled style="opacity:0.5;">
+    <span class="val" id="dBilgeVal">367mm</span>
+  </div>
+  <div class="row">
+    <label>통 높이</label>
+    <input type="range" id="h" min="150" max="900" step="10" value="450">
+    <span class="val" id="hVal">450mm</span>
+  </div>
+  <div class="row">
+    <label>스테이브 개수</label>
+    <input type="range" id="n" min="6" max="40" step="1" value="12">
+    <span class="val" id="nVal">12개</span>
+  </div>
+  <div class="row">
+    <label>판재 두께</label>
+    <input type="range" id="t" min="6" max="30" step="1" value="12">
+    <span class="val" id="tVal">12mm</span>
+  </div>
+  <div class="row">
+    <label>헤드 두께 (독립 조절)</label>
+    <input type="range" id="headT" min="4" max="25" step="0.2" value="9.6">
+    <span class="val" id="headTVal">9.6mm</span>
+  </div>
+  <div id="ratioStatus" style="margin-top:10px;padding:8px 10px;border-radius:4px;font-size:12px;line-height:1.6;"></div>
+</div>
+
+<div class="grid3">
+  <div class="mini"><div class="n" id="angleOut">15.0°</div><div class="l">편측 베벨각</div></div>
+  <div class="mini"><div class="n" id="topWOut">78mm</div><div class="l">TOP/BOTTOM 폭</div></div>
+  <div class="mini"><div class="n" id="ctrWOut">96mm</div><div class="l">CENTER 최대 폭</div></div>
+</div>
+<div class="grid3" style="margin-top:8px;">
+  <div class="mini" style="background:var(--copper);grid-column:1/4;"><div class="n" id="volOut" style="color:#fff;">30.6 L</div><div class="l" style="color:#f5e6d8;">기하학적 최대 용적(내경 기준) · 충전율 반영 시 <span id="volFillOut">27.5</span>L 채움</div></div>
+</div>
+
+<div class="panel">
+  <div class="section-title">② 스테이브 1개 정면도 (외곽 컷용, 실측 비율)</div>
+  <svg id="frontView"></svg>
+  <div class="caption">⚠️ 통 전체가 아니라 <b>판재 1장</b>입니다. 이 곡선을 따라 <b>수직 스트레이트 비트</b>로 외곽을 오려내세요 (베벨 아님)</div>
+</div>
+
+<div class="panel">
+  <div class="section-title">③ 옆면 단면 (베벨 컷용)</div>
+  <svg id="edgeView" viewBox="0 0 320 170"></svg>
+  <div class="caption">외곽 컷 후, 긴 옆면 2개를 이 각도로 <b>틸트 컷</b> (길이 전체 일정)</div>
+</div>
+
+<div class="panel">
+  <div class="section-title">작업 순서</div>
+  <div class="step"><div class="num">1</div><div>판재에 정면 실루엣 도면을 전사(또는 CNC 파일로 변환) → 수직 비트로 외곽 오려내기</div></div>
+  <div class="step"><div class="num">2</div><div>오려낸 스테이브를 테이블쏘/라우터에 <span id="stepAngle">15.0</span>° 틸트로 세팅 → 긴 옆면 2개를 길이 방향 통째로 베벨 컷</div></div>
+  <div class="step"><div class="num">3</div><div>N개 모아 가조립 → 벤딩(스팀+후프 조임) → 크로즈 홈 라우팅 → 최종 조립</div></div>
+</div>
+
+<div class="note">
+  <b>왜 실루엣과 베벨을 분리해서 가공하나요?</b> 정면 실루엣(위→중앙→아래 폭 변화)은 <i>곡선 경로</i>를 따라가는 컷이고, 베벨각은 판재를 눕혀 <i>직선으로</i> 관통하는 컷이라 서로 다른 지그·비트 세팅이 필요해요. 베벨각(180°/N)은 반지름과 무관하게 스테이브 개수로만 결정되므로 길이 전체에서 동일한 각도로 한 번에 컷하면 됩니다.
+</div>
+
+<div class="panel">
+  <div class="section-title">④ 헤드(뚜껑) 결합부 상세도</div>
+  <svg id="croveView"></svg>
+  <div class="caption">스테이브 상단 끝단 단면 — 침(chime) 모따기 + 크로즈(croze) 홈</div>
+</div>
+
+<div class="panel">
+  <svg id="headView"></svg>
+  <div class="caption">헤드 판재 단면 — 위/아래 지름이 다른 쐐기 형태로 베벨 가공, 크로즈 홈에 끼움</div>
+  <div class="grid3" style="margin-top:12px;margin-bottom:0;">
+    <div class="mini"><div class="n"><span id="headTopDiaLbl">352</span>mm</div><div class="l">위지름(홈쪽)</div></div>
+    <div class="mini"><div class="n"><span id="headBotDiaLbl">276</span>mm</div><div class="l">아래지름(노출면)</div></div>
+    <div class="mini"><div class="n"><span id="headBevelLbl">66.4</span>°</div><div class="l">베벨각(수평기준)</div></div>
+  </div>
+  <div class="caption" style="margin-top:8px;">두께 <span id="headThickLbl">9.6</span>mm 기준 계산</div>
+</div>
+
+<div class="panel">
+  <div class="section-title">헤드 결합 순서</div>
+  <div class="step"><div class="num">1</div><div>벤딩 + 후프 가조립 완료 후, 통 끝에서 <span id="crozeDistLbl">18</span>mm 지점에 원둘레를 따라 금 긋기</div></div>
+  <div class="step"><div class="num">2</div><div>통 맨 끝(가장자리)은 침 베벨(약 45°)로 살짝 모따기 — 안전/미관용, 구조엔 영향 없음</div></div>
+  <div class="step"><div class="num">3</div><div>표시한 선 위치에 <b>크로즈 홈</b>을 라우터(크로즈 비트) 또는 손 크로즈 도구로 파냄 — 깊이 약 <span id="crozeDepthLbl">4</span>mm, 폭 약 <span id="crozeWidthLbl">10</span>mm</div></div>
+  <div class="step"><div class="num">4</div><div>헤드용 판재 여러 장을 도웰/글루로 edge-join → 크로즈 홈 바닥 지름에 맞춰 원판으로 절단</div></div>
+  <div class="step"><div class="num">5</div><div>원판 가장자리를 헤드 베벨(호블링)로 깎아 크로즈 홈 각도에 맞는 쐐기 단면으로 성형</div></div>
+  <div class="step"><div class="num">6</div><div>후프를 살짝 풀어 홈에 헤드를 밀어 넣고, 다시 후프를 조여 고정 + 압착</div></div>
+</div>
+
+<div class="note">
+  <b>주의</b>: 크로즈는 통이 이미 원통(또는 다각통) 형태로 조립·벤딩된 <i>이후</i>에, 안쪽 둘레를 따라 파는 홈이라 개별 스테이브 상태에서 미리 가공하면 정렬이 틀어질 수 있어요. 가능하면 가조립 상태에서 크로즈 라우터 지그(원형 트래멀)로 한 번에 둘러 파는 게 정확합니다.
+</div>
+
+<div class="panel">
+  <div class="section-title">⑤ 헤드 원판 평면도 (연동)</div>
+  <svg id="headDiscView"></svg>
+  <div class="caption">위/아래 뚜껑 원판 — 헤드 지름 입력값에서 자동 계산됨</div>
+</div>
+
+<div class="panel">
+  <div class="section-title">⑥ 철재 후프(hoop) 배치 및 사이즈 (연동)</div>
+  <svg id="hoopView"></svg>
+  <div class="caption">통 옆면 실루엣 위 6개 후프 위치 — 벌지/헤드 지름 변화에 자동 연동</div>
+  <table id="hoopTable" style="width:100%;border-collapse:collapse;margin-top:12px;font-size:12px;">
+    <thead><tr style="background:#3E2A1E;color:#F5F0E6;">
+      <th style="padding:6px;text-align:left;">후프</th>
+      <th style="padding:6px;">위치</th>
+      <th style="padding:6px;">지름</th>
+      <th style="padding:6px;">밴드 길이</th>
+      <th style="padding:6px;">권장 폭</th>
+      <th style="padding:6px;">권장 두께</th>
+    </tr></thead>
+    <tbody id="hoopTableBody"></tbody>
+  </table>
+</div>
+
+<div class="note">
+  <b>후프 배치 기준 (전통 6-후프 방식)</b>: 침 후프(chime, 양끝) → 쿼터 후프(quarter, 중간) → 벌지 후프(bilge, 중앙 2개, 서로 근접 배치)로 구성됩니다. 침 후프가 가장 큰 압축력을 받으므로 두께를 더 두껍게 하거나 폭을 넓히는 경우가 많아요. 밴드 길이는 원주 + 리벳/용접 여유 40mm로 계산했습니다.
+</div>
+
+<script>
+// 오크통다운 비율 상수 (고정)
+const BILGE_RATIO = 1.225;          // 벌지/헤드 고정 비율
+const HEIGHT_RATIO_MIN = 1.4, HEIGHT_RATIO_MAX = 1.8;
+
+let lastDh = null; // 헤드 지름 변경 감지용 (높이 비율 유지 스케일링에 사용)
+
+function polygonAreaRatio(n){
+  return (n * Math.sin(2*Math.PI/n)) / (2*Math.PI);
+}
+
+// 내경(스테이브 두께 제외) 기준 실사용 부피(L) — Simpson 적분
+function netVolumeLiters(Dh, Db, H, N, T){
+  const dhIn = Dh - 2*T, dbIn = Db - 2*T;
+  const ratio = polygonAreaRatio(N);
+  const steps = 200;
+  let total = 0;
+  const dy = H/steps;
+  for(let i=0;i<=steps;i++){
+    const y = H*i/steps;
+    const d = dhIn + (dbIn-dhIn)*Math.sin(Math.PI*y/H);
+    const r = d/2;
+    const area = ratio*Math.PI*r*r;
+    const w = (i===0||i===steps) ? 1 : (i%2===1 ? 4 : 2);
+    total += w*area;
+  }
+  total *= dy/3;
+  return total/1_000_000; // mm^3 -> L
+}
+
+function calc(){
+  const Dh = +document.getElementById('dHead').value;
+
+  const dBilgeEl = document.getElementById('dBilge');
+  const hEl = document.getElementById('h');
+
+  // 벌지는 고정 비율로 자동 계산 (조절 불가)
+  const Db = Math.round(Dh * BILGE_RATIO);
+  dBilgeEl.min = Db; dBilgeEl.max = Db; dBilgeEl.value = Db;
+
+  // 높이 허용범위 재계산
+  const hMin = Math.round(Dh * HEIGHT_RATIO_MIN / 10) * 10;
+  const hMax = Math.round(Dh * HEIGHT_RATIO_MAX / 10) * 10;
+  hEl.min = hMin;
+  hEl.max = hMax;
+
+  // 헤드 지름이 바뀐 경우 → 높이를 같은 비율로 부드럽게 스케일 (min/max 스냅 방지)
+  if(lastDh !== null && lastDh !== Dh){
+    const prevRatio = +hEl.value / lastDh;
+    let scaledH = Math.round(prevRatio * Dh / 10) * 10;
+    scaledH = Math.min(hMax, Math.max(hMin, scaledH));
+    hEl.value = scaledH;
+  } else {
+    if(+hEl.value < hMin) hEl.value = hMin;
+    if(+hEl.value > hMax) hEl.value = hMax;
+  }
+  lastDh = Dh;
+
+  const H = +hEl.value;
+  const N = +document.getElementById('n').value;
+  const T = +document.getElementById('t').value;
+  const headThick = +document.getElementById('headT').value;
+
+  const heightRatio = H / Dh;
+  const statusEl = document.getElementById('ratioStatus');
+  statusEl.style.background = '#f0ead9';
+  statusEl.style.border = '1px solid #c9b896';
+  statusEl.style.color = '#3E2A1E';
+  statusEl.innerHTML =
+    `🔒 벌지/헤드 비율 <b>${BILGE_RATIO}</b> (고정)　`+
+    `✅ 높이/헤드 비율 <b>${heightRatio.toFixed(2)}</b> (허용 ${HEIGHT_RATIO_MIN}~${HEIGHT_RATIO_MAX})<br>`+
+    `<span style="font-size:11px;color:#6b5847;">헤드 지름을 바꾸면 높이가 같은 비율을 유지하며 자동으로 스케일됩니다.</span>`;
+
+  const geomVolL = netVolumeLiters(Dh, Db, H, N, T);
+  const fillRatio = +document.getElementById('fillRatio').value / 100;
+  document.getElementById('volOut').textContent = geomVolL.toFixed(1)+' L';
+  document.getElementById('volFillOut').textContent = (geomVolL*fillRatio).toFixed(1);
+
+  document.getElementById('dHeadVal').textContent = Dh+'mm';
+  document.getElementById('dBilgeVal').textContent = Db+'mm';
+  document.getElementById('hVal').textContent = H+'mm';
+  document.getElementById('nVal').textContent = N+'개';
+  document.getElementById('tVal').textContent = T+'mm';
+  document.getElementById('headTVal').textContent = headThick.toFixed(1)+'mm';
+
+  const angle = 180/N;
+  const topHalf = (Dh/2)*Math.sin(Math.PI/N);
+  const ctrHalf = (Db/2)*Math.sin(Math.PI/N);
+  const topW = topHalf*2, ctrW = ctrHalf*2;
+
+  document.getElementById('angleOut').textContent = angle.toFixed(1)+'°';
+  document.getElementById('topWOut').textContent = Math.round(topW)+'mm';
+  document.getElementById('ctrWOut').textContent = Math.round(ctrW)+'mm';
+  document.getElementById('stepAngle').textContent = angle.toFixed(1);
+
+  // 크로즈 치수 — 헤드 두께와 연동해 여유(clearance)를 두고 계산
+  const crozeDepth = Math.max(2, T*0.35);
+  const crozeWidth = headThick*1.125; // 헤드 두께 + 약 12.5% 끼움 여유
+  const crozeDist = Math.max(12, T*1.5);
+
+  drawFront(topHalf, ctrHalf, H);
+  drawEdge(ctrW, T, angle);
+  drawCroze(T, crozeDepth, crozeWidth, crozeDist);
+  drawHead(headThick, Dh, T, crozeDepth);
+  drawHeadDisc(Dh, T, crozeDepth);
+  drawHoops(Dh, Db, H, T);
+}
+
+function drawFront(topHalf, ctrHalf, H){
+  const svg = document.getElementById('frontView');
+  const padY = 26, padX = 78; // padX 넉넉히: mm 치수선 라벨 공간
+  const drawH = 340; // 고정 높이 픽셀
+  const scale = drawH/H; // x,y 동일 스케일 => 실측 비율 유지
+  const maxHalf = Math.max(topHalf, ctrHalf);
+  const boardWpx = maxHalf*2*scale;
+  const totalW = boardWpx + padX*2;
+  const totalH = drawH + padY*2;
+  const cx = totalW/2;
+
+  svg.setAttribute('viewBox', `0 0 ${totalW.toFixed(0)} ${totalH.toFixed(0)}`);
+
+  let leftPts = [], rightPts = [];
+  const steps = 40;
+  for(let i=0;i<=steps;i++){
+    const y = (i/steps)*H;
+    const half = topHalf + (ctrHalf-topHalf)*Math.sin(Math.PI*y/H);
+    const py = padY + y*scale;
+    leftPts.push(`${(cx-half*scale).toFixed(1)},${py.toFixed(1)}`);
+    rightPts.push(`${(cx+half*scale).toFixed(1)},${py.toFixed(1)}`);
+  }
+  const pathPts = leftPts.concat(rightPts.reverse()).join(' ');
+
+  const topY = padY, botY = padY+H*scale, ctrY = padY+(H/2)*scale;
+  const topPx = topHalf*scale, ctrPx = ctrHalf*scale;
+
+  svg.innerHTML = `
+    <text x="${cx}" y="14" font-family="Georgia" font-size="12" fill="#3E2A1E" text-anchor="middle" font-weight="bold">스테이브 1개</text>
+    <polygon points="${pathPts}" fill="#C89666" stroke="#3E2A1E" stroke-width="2"/>
+    <line x1="${cx}" y1="${topY-8}" x2="${cx}" y2="${botY+8}" stroke="#8a7a68" stroke-width="1" stroke-dasharray="4,3"/>
+
+    <line x1="${cx-topPx}" y1="${topY-14}" x2="${cx+topPx}" y2="${topY-14}" stroke="#B5651D" stroke-width="1"/>
+    <line x1="${cx-topPx}" y1="${topY-18}" x2="${cx-topPx}" y2="${topY-10}" stroke="#B5651D" stroke-width="1"/>
+    <line x1="${cx+topPx}" y1="${topY-18}" x2="${cx+topPx}" y2="${topY-10}" stroke="#B5651D" stroke-width="1"/>
+    <text x="${cx}" y="${topY-20}" font-family="Courier New" font-size="11" fill="#B5651D" text-anchor="middle">${(topPx/scale*2).toFixed(0)}mm (TOP)</text>
+
+    <line x1="${cx+ctrPx+14}" y1="${ctrY}" x2="${cx+ctrPx+14}" y2="${ctrY}" stroke="#B5651D" stroke-width="1"/>
+    <text x="${cx+ctrPx+18}" y="${ctrY-6}" font-family="Courier New" font-size="11" fill="#B5651D" font-weight="bold">CENTER</text>
+    <text x="${cx+ctrPx+18}" y="${ctrY+8}" font-family="Courier New" font-size="11" fill="#B5651D" font-weight="bold">${(ctrPx/scale*2).toFixed(0)}mm</text>
+
+    <line x1="${cx-topPx}" y1="${botY+14}" x2="${cx+topPx}" y2="${botY+14}" stroke="#B5651D" stroke-width="1"/>
+    <line x1="${cx-topPx}" y1="${botY+10}" x2="${cx-topPx}" y2="${botY+18}" stroke="#B5651D" stroke-width="1"/>
+    <line x1="${cx+topPx}" y1="${botY+10}" x2="${cx+topPx}" y2="${botY+18}" stroke="#B5651D" stroke-width="1"/>
+    <text x="${cx}" y="${botY+30}" font-family="Courier New" font-size="11" fill="#B5651D" text-anchor="middle">${(topPx/scale*2).toFixed(0)}mm (BOTTOM)</text>
+
+    <line x1="12" y1="${topY}" x2="12" y2="${botY}" stroke="#8a7a68" stroke-width="1"/>
+    <line x1="8" y1="${topY}" x2="16" y2="${topY}" stroke="#8a7a68" stroke-width="1"/>
+    <line x1="8" y1="${botY}" x2="16" y2="${botY}" stroke="#8a7a68" stroke-width="1"/>
+    <text x="12" y="${(topY+botY)/2}" font-family="Courier New" font-size="10" fill="#6b5847" text-anchor="middle" transform="rotate(-90 12 ${(topY+botY)/2})">${H}mm</text>
+  `;
+}
+
+function drawEdge(chord, T, angle){
+  const svg = document.getElementById('edgeView');
+  const cx=160, cy=85;
+  const wPx = Math.min(190, Math.max(60, chord*0.55));
+  const tPx = Math.min(50, Math.max(14, T*2));
+  const rad = angle*Math.PI/180;
+  const dx = tPx*Math.tan(rad);
+
+  const x0 = cx - wPx/2, x1 = cx + wPx/2;
+  const y0 = cy - tPx/2, y1 = cy + tPx/2;
+  const pts = `${x0+dx},${y0} ${x1-dx},${y0} ${x1},${y1} ${x0},${y1}`;
+
+  const arcR = 24;
+  const ax = x1, ay = y0;
+  const arc = `M${ax},${ay+arcR} A${arcR},${arcR} 0 0 1 ${ax-dx*(arcR/tPx)},${ay}`;
+
+  svg.innerHTML = `
+    <polygon points="${pts}" fill="#C89666" stroke="#3E2A1E" stroke-width="2"/>
+    <line x1="${x1}" y1="${y0-18}" x2="${x1}" y2="${y0}" stroke="#8a7a68" stroke-width="1" stroke-dasharray="3,3"/>
+    <path d="${arc}" fill="none" stroke="#B5651D" stroke-width="1.5"/>
+    <text x="${x1+8}" y="${y0+16}" font-family="Courier New" font-size="13" fill="#B5651D" font-weight="bold">${angle.toFixed(1)}°</text>
+    <text x="${cx}" y="${y1+22}" font-family="Georgia" font-size="12" fill="#5a4a3a" text-anchor="middle">두께 ${T}mm 판재 · 편측 ${angle.toFixed(1)}° 베벨 (양쪽 동일)</text>
+  `;
+}
+
+function drawCroze(T, crozeDepth, crozeWidth, crozeDist){
+  const svg = document.getElementById('croveView');
+
+  document.getElementById('crozeDepthLbl').textContent = crozeDepth.toFixed(1);
+  document.getElementById('crozeWidthLbl').textContent = crozeWidth.toFixed(1);
+  document.getElementById('crozeDistLbl').textContent = crozeDist.toFixed(1);
+
+  const staveTpx = Math.max(20, T*3);
+  const x0 = 90, x1 = x0+staveTpx;
+  const yTop = 30;
+  const chimeLen = staveTpx*0.4;
+
+  const crozeYtop = yTop + crozeDist*2;
+  const crozeYbot = crozeYtop + crozeWidth*2;
+  const crozeXin = x1 - crozeDepth*2.5;
+  const yBot = crozeYbot + 80; // 치수선/여백 확보
+
+  const totalW = 320, totalH = yBot + 20;
+  svg.setAttribute('viewBox', `0 0 ${totalW} ${totalH}`);
+
+  svg.innerHTML = `
+    <!-- outer face -->
+    <line x1="${x0}" y1="${yTop+chimeLen}" x2="${x0}" y2="${yBot}" stroke="#3E2A1E" stroke-width="2.5"/>
+    <!-- chime bevel -->
+    <line x1="${x0}" y1="${yTop+chimeLen}" x2="${x0+chimeLen}" y2="${yTop}" stroke="#3E2A1E" stroke-width="2.5"/>
+    <!-- top end -->
+    <line x1="${x0+chimeLen}" y1="${yTop}" x2="${x1}" y2="${yTop}" stroke="#3E2A1E" stroke-width="2.5"/>
+    <!-- inner face with croze notch -->
+    <line x1="${x1}" y1="${yTop}" x2="${x1}" y2="${crozeYtop}" stroke="#3E2A1E" stroke-width="2.5"/>
+    <line x1="${x1}" y1="${crozeYtop}" x2="${crozeXin}" y2="${crozeYtop}" stroke="#3E2A1E" stroke-width="2.5"/>
+    <line x1="${crozeXin}" y1="${crozeYtop}" x2="${crozeXin}" y2="${crozeYbot}" stroke="#3E2A1E" stroke-width="2.5"/>
+    <line x1="${crozeXin}" y1="${crozeYbot}" x2="${x1}" y2="${crozeYbot}" stroke="#3E2A1E" stroke-width="2.5"/>
+    <line x1="${x1}" y1="${crozeYbot}" x2="${x1}" y2="${yBot}" stroke="#3E2A1E" stroke-width="2.5"/>
+    <polygon points="${x0},${yTop+chimeLen} ${x0+chimeLen},${yTop} ${x1},${yTop} ${x1},${crozeYtop} ${crozeXin},${crozeYtop} ${crozeXin},${crozeYbot} ${x1},${crozeYbot} ${x1},${yBot} ${x0},${yBot}" fill="#C89666" fill-opacity="0.5"/>
+
+    <text x="${x0-8}" y="${yTop+chimeLen-4}" font-family="Georgia" font-size="10" fill="#6b5847" text-anchor="end">외측면</text>
+    <text x="${x1+8}" y="${yTop-4}" font-family="Georgia" font-size="10" fill="#6b5847">← 통 끝</text>
+    <text x="${(x0+chimeLen+x1)/2}" y="${yTop-10}" font-family="Courier New" font-size="9" fill="#B5651D" text-anchor="middle">침(chime) 모따기</text>
+    <text x="${crozeXin-6}" y="${(crozeYtop+crozeYbot)/2+3}" font-family="Courier New" font-size="9" fill="#B5651D" text-anchor="end">크로즈</text>
+
+    <line x1="${x1+18}" y1="${crozeYtop}" x2="${x1+18}" y2="${crozeYbot}" stroke="#8a7a68" stroke-width="1"/>
+    <line x1="${x1+14}" y1="${crozeYtop}" x2="${x1+22}" y2="${crozeYtop}" stroke="#8a7a68" stroke-width="1"/>
+    <line x1="${x1+14}" y1="${crozeYbot}" x2="${x1+22}" y2="${crozeYbot}" stroke="#8a7a68" stroke-width="1"/>
+    <text x="${x1+26}" y="${(crozeYtop+crozeYbot)/2-4}" font-family="Georgia" font-size="9" fill="#6b5847">홈폭(길이)</text>
+    <text x="${x1+26}" y="${(crozeYtop+crozeYbot)/2+10}" font-family="Courier New" font-size="12" fill="#B5651D" font-weight="bold">${crozeWidth.toFixed(1)}mm</text>
+
+    <line x1="${crozeXin}" y1="${crozeYbot+16}" x2="${x1}" y2="${crozeYbot+16}" stroke="#8a7a68" stroke-width="1"/>
+    <line x1="${crozeXin}" y1="${crozeYbot+12}" x2="${crozeXin}" y2="${crozeYbot+20}" stroke="#8a7a68" stroke-width="1"/>
+    <line x1="${x1}" y1="${crozeYbot+12}" x2="${x1}" y2="${crozeYbot+20}" stroke="#8a7a68" stroke-width="1"/>
+    <text x="${(crozeXin+x1)/2}" y="${crozeYbot+32}" font-family="Georgia" font-size="9" fill="#6b5847" text-anchor="middle">홈깊이</text>
+    <text x="${(crozeXin+x1)/2}" y="${crozeYbot+46}" font-family="Courier New" font-size="12" fill="#B5651D" font-weight="bold" text-anchor="middle">${crozeDepth.toFixed(1)}mm</text>
+
+    <line x1="30" y1="${yTop}" x2="30" y2="${crozeYtop}" stroke="#8a7a68" stroke-width="1"/>
+    <text x="30" y="${(yTop+crozeYtop)/2}" font-family="Courier New" font-size="9" fill="#6b5847" text-anchor="middle" transform="rotate(-90 30 ${(yTop+crozeYtop)/2})">끝단 거리</text>
+  `;
+}
+
+function drawHead(headT, Dh, T, crozeDepth){
+  const svg = document.getElementById('headView');
+  const totalW = 320, totalH = 170;
+  svg.setAttribute('viewBox', `0 0 ${totalW} ${totalH}`);
+
+  // 위지름(넓은 면, 크로즈 홈 바닥과 맞닿는 면) / 아래지름(좁은 면, 노출면)
+  const topDia = Dh - 2*T + 2*crozeDepth;
+  const bottomDia = Dh - 2*T;
+  const bevelAngle = Math.atan2(headT, crozeDepth) * 180/Math.PI; // 수평(평면) 기준 각도
+
+  document.getElementById('headTopDiaLbl').textContent = topDia.toFixed(0);
+  document.getElementById('headBotDiaLbl').textContent = bottomDia.toFixed(0);
+  document.getElementById('headBevelLbl').textContent = bevelAngle.toFixed(1);
+  document.getElementById('headThickLbl').textContent = headT.toFixed(1);
+
+  const cx = 160, cy = 75;
+  const flatW = 150; // 위쪽(넓은 면) 픽셀 폭
+  const bevelRun = Math.max(10, crozeDepth*2.2); // 픽셀 상 베벨 가로 이동량
+  const tPx = headT*2.2;
+
+  const xTopL = cx-flatW/2, xTopR = cx+flatW/2;
+  const xBotL = xTopL+bevelRun, xBotR = xTopR-bevelRun;
+  const yTop = cy-tPx/2, yBot = cy+tPx/2;
+
+  svg.innerHTML = `
+    <polygon points="${xTopL},${yTop} ${xTopR},${yTop} ${xBotR},${yBot} ${xBotL},${yBot}"
+      fill="#C89666" stroke="#3E2A1E" stroke-width="2.5"/>
+
+    <line x1="${xTopL}" y1="${yTop-14}" x2="${xTopR}" y2="${yTop-14}" stroke="#B5651D" stroke-width="1"/>
+    <line x1="${xTopL}" y1="${yTop-18}" x2="${xTopL}" y2="${yTop-10}" stroke="#B5651D" stroke-width="1"/>
+    <line x1="${xTopR}" y1="${yTop-18}" x2="${xTopR}" y2="${yTop-10}" stroke="#B5651D" stroke-width="1"/>
+    <text x="${cx}" y="${yTop-20}" font-family="Courier New" font-size="12" fill="#B5651D" font-weight="bold" text-anchor="middle">위지름 ${topDia.toFixed(0)}mm (홈 안쪽 면)</text>
+
+    <line x1="${xBotL}" y1="${yBot+14}" x2="${xBotR}" y2="${yBot+14}" stroke="#B5651D" stroke-width="1"/>
+    <line x1="${xBotL}" y1="${yBot+10}" x2="${xBotL}" y2="${yBot+18}" stroke="#B5651D" stroke-width="1"/>
+    <line x1="${xBotR}" y1="${yBot+10}" x2="${xBotR}" y2="${yBot+18}" stroke="#B5651D" stroke-width="1"/>
+    <text x="${cx}" y="${yBot+32}" font-family="Courier New" font-size="12" fill="#B5651D" font-weight="bold" text-anchor="middle">아래지름 ${bottomDia.toFixed(0)}mm (노출면)</text>
+
+    <line x1="${xTopR+8}" y1="${yTop}" x2="${xTopR+8}" y2="${yBot}" stroke="#8a7a68" stroke-width="1"/>
+    <text x="${xTopR+14}" y="${(yTop+yBot)/2+3}" font-family="Courier New" font-size="10" fill="#6b5847">${headT.toFixed(1)}mm</text>
+
+    <path d="M${xTopR-16},${yTop} L${xTopR-16},${yBot} L${xBotR-8},${yBot}" fill="none" stroke="#3E2A1E" stroke-width="1" stroke-dasharray="2,2"/>
+    <text x="${xTopR-20}" y="${yBot+2}" font-family="Courier New" font-size="11" fill="#3E2A1E" font-weight="bold" text-anchor="end">${bevelAngle.toFixed(1)}°</text>
+  `;
+}
+
+function drawHeadDisc(Dh, T, crozeDepth){
+  const svg = document.getElementById('headDiscView');
+  const discDia = Math.max(20, Dh - 2*T + 2*crozeDepth); // 크로즈 바닥 지름 = 헤드 최종 지름
+
+  const totalW = 320, totalH = 260;
+  svg.setAttribute('viewBox', `0 0 ${totalW} ${totalH}`);
+  const cx = totalW/2, cy = 130;
+  const r = 95;
+
+  // 판재 이어붙임 라인 (4장 예시, 장식용)
+  let boardLines = '';
+  const boardCount = 4;
+  for(let i=1;i<boardCount;i++){
+    const off = -r + (2*r/boardCount)*i;
+    const half = Math.sqrt(Math.max(0, r*r - off*off));
+    boardLines += `<line x1="${cx+off}" y1="${cy-half}" x2="${cx+off}" y2="${cy+half}" stroke="#8a7a68" stroke-width="1" stroke-dasharray="3,2"/>`;
+  }
+
+  svg.innerHTML = `
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="#C89666" stroke="#3E2A1E" stroke-width="2.5"/>
+    ${boardLines}
+    <line x1="${cx-r}" y1="${cy+r+16}" x2="${cx+r}" y2="${cy+r+16}" stroke="#B5651D" stroke-width="1"/>
+    <line x1="${cx-r}" y1="${cy+r+12}" x2="${cx-r}" y2="${cy+r+20}" stroke="#B5651D" stroke-width="1"/>
+    <line x1="${cx+r}" y1="${cy+r+12}" x2="${cx+r}" y2="${cy+r+20}" stroke="#B5651D" stroke-width="1"/>
+    <text x="${cx}" y="${cy+r+34}" font-family="Courier New" font-size="13" fill="#B5651D" font-weight="bold" text-anchor="middle">${discDia.toFixed(0)}mm</text>
+    <text x="${cx}" y="20" font-family="Georgia" font-size="11" fill="#5a4a3a" text-anchor="middle">= 크로즈 홈 바닥 지름 (헤드 지름 ${Dh}mm − 스테이브 두께×2 + 크로즈깊이×2)</text>
+  `;
+  return discDia;
+}
+
+function hoopDiaAt(Dh, Db, H, yFrac){
+  const y = yFrac*H;
+  return Dh + (Db-Dh)*Math.sin(Math.PI*y/H);
+}
+
+function drawHoops(Dh, Db, H, T){
+  const svg = document.getElementById('hoopView');
+  const totalW = 320;
+  const drawH = 300;
+  const scale = drawH/H;
+  const maxDia = Math.max(Dh, Db);
+  const maxHalfPx = (maxDia/2)*scale;
+  const padX = 40, padY = 20;
+  const totalH = drawH + padY*2;
+  const svgW = maxHalfPx*2 + padX*2;
+  svg.setAttribute('viewBox', `0 0 ${svgW.toFixed(0)} ${totalH.toFixed(0)}`);
+  const cx = svgW/2;
+
+  // 통 실루엣 (전체 폭 기준, 곡선)
+  let leftPts=[], rightPts=[];
+  const steps=40;
+  for(let i=0;i<=steps;i++){
+    const yFrac = i/steps;
+    const dia = hoopDiaAt(Dh, Db, H, yFrac);
+    const half = (dia/2)*scale;
+    const py = padY + yFrac*drawH;
+    leftPts.push(`${(cx-half).toFixed(1)},${py.toFixed(1)}`);
+    rightPts.push(`${(cx+half).toFixed(1)},${py.toFixed(1)}`);
+  }
+  const outline = leftPts.concat(rightPts.reverse()).join(' ');
+
+  const hoopFracs = [
+    {name:'침 후프 (TOP)', frac:0.05},
+    {name:'쿼터 후프 (TOP측)', frac:0.26},
+    {name:'벌지 후프 (TOP측)', frac:0.46},
+    {name:'벌지 후프 (BOTTOM측)', frac:0.54},
+    {name:'쿼터 후프 (BOTTOM측)', frac:0.74},
+    {name:'침 후프 (BOTTOM)', frac:0.95},
+  ];
+
+  let hoopSvg = '';
+  let rows = '';
+  hoopFracs.forEach((hp, idx)=>{
+    const dia = hoopDiaAt(Dh, Db, H, hp.frac);
+    const half = (dia/2)*scale;
+    const py = padY + hp.frac*drawH;
+    const isChime = hp.name.includes('침');
+    const bandColor = isChime ? '#3E2A1E' : '#6b5847';
+    hoopSvg += `<line x1="${(cx-half).toFixed(1)}" y1="${py.toFixed(1)}" x2="${(cx+half).toFixed(1)}" y2="${py.toFixed(1)}" stroke="${bandColor}" stroke-width="5"/>`;
+    hoopSvg += `<text x="${cx+half+8}" y="${py+4}" font-family="Courier New" font-size="9" fill="#B5651D">${idx+1}</text>`;
+
+    const circ = Math.PI*dia;
+    const bandLen = circ + 40;
+    const width = Math.max(20, Math.round(T*2.2));
+    let thickness;
+    if(Db < 300) thickness = '0.8~1.0mm';
+    else if(Db < 450) thickness = '1.0~1.5mm';
+    else thickness = '1.5~2.0mm';
+    if(isChime){
+      // chime hoops carry more stress -> recommend one tier up
+      thickness = Db < 300 ? '1.0~1.2mm' : (Db < 450 ? '1.5~1.8mm' : '2.0~2.5mm');
+    }
+    rows += `<tr style="border-bottom:1px solid #d8cbb4;">
+      <td style="padding:6px;">${idx+1}. ${hp.name}</td>
+      <td style="padding:6px;text-align:center;">${(hp.frac*H).toFixed(0)}mm</td>
+      <td style="padding:6px;text-align:center;font-family:'Courier New';">${dia.toFixed(0)}mm</td>
+      <td style="padding:6px;text-align:center;font-family:'Courier New';">${bandLen.toFixed(0)}mm</td>
+      <td style="padding:6px;text-align:center;">${width}mm</td>
+      <td style="padding:6px;text-align:center;">${thickness}</td>
+    </tr>`;
+  });
+
+  svg.innerHTML = `<polygon points="${outline}" fill="#C89666" fill-opacity="0.35" stroke="#3E2A1E" stroke-width="2"/>${hoopSvg}`;
+  document.getElementById('hoopTableBody').innerHTML = rows;
+}
+
+function recommendFromLiters(){
+  const targetFillL = +document.getElementById('targetLiters').value;
+  const fillRatio = +document.getElementById('fillRatio').value / 100;
+  const targetGeomL = targetFillL / fillRatio; // 실제로 채우고 싶은 양 -> 필요한 기하학적 최대 용적
+  const N = +document.getElementById('n').value;
+  const T = +document.getElementById('t').value;
+  const m = 1.6; // 추천 높이 비율(권장범위 1.4~1.8 중간값)
+
+  // Dh에 대해 이진탐색: netVolumeLiters(Dh, Dh*BILGE_RATIO, Dh*m, N, T) == targetGeomL
+  let lo = 80, hi = 900;
+  for(let iter=0; iter<40; iter++){
+    const mid = (lo+hi)/2;
+    const v = netVolumeLiters(mid, mid*BILGE_RATIO, mid*m, N, T);
+    if(v < targetGeomL) lo = mid; else hi = mid;
+  }
+  const recommendedDh = Math.round((lo+hi)/2 / 5) * 5;
+
+  const dHeadEl = document.getElementById('dHead');
+  // 슬라이더 물리적 범위를 넘어서면 확장
+  if(recommendedDh > +dHeadEl.max) dHeadEl.max = recommendedDh;
+  if(recommendedDh < +dHeadEl.min) dHeadEl.min = recommendedDh;
+  dHeadEl.value = recommendedDh;
+
+  // 추천 높이도 명시적으로 설정 (비율 m 그대로 적용)
+  lastDh = recommendedDh; // calc()에서 스케일 로직이 이 값을 최신으로 인식하도록
+  const hEl = document.getElementById('h');
+  const hMinR = Math.round(recommendedDh * HEIGHT_RATIO_MIN / 10) * 10;
+  const hMaxR = Math.round(recommendedDh * HEIGHT_RATIO_MAX / 10) * 10;
+  hEl.min = hMinR; hEl.max = hMaxR;
+  hEl.value = Math.round(recommendedDh * m / 10) * 10;
+
+  calc();
+}
+
+document.getElementById('applyRecommendBtn').addEventListener('click', recommendFromLiters);
+document.getElementById('targetLiters').addEventListener('input', function(){
+  document.getElementById('targetLitersVal').textContent = this.value+'L';
+});
+document.getElementById('fillRatio').addEventListener('input', function(){
+  document.getElementById('fillRatioVal').textContent = this.value+'%';
+  calc();
+});
+
+['dHead','h','n','t','headT'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', calc);
+});
+calc();
+</script>
+
+</body>
+</html>
